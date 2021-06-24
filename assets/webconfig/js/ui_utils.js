@@ -67,7 +67,7 @@ function updateSessions() {
 
 function validateDuration(d) {
   if (typeof d === "undefined" || d < 0)
-    return 0;
+    return ENDLESS;
   else
     return d *= 1000;
 }
@@ -162,25 +162,22 @@ function initLanguageSelection() {
 
   var langLocale = storedLang;
 
-  // If no language has been set, resolve browser locale
-  if (langLocale === 'auto') {
-    langLocale = $.i18n().locale.substring(0, 2);
-  }
-
-  // Resolve text for language code
-  var langText = 'Please Select';
-
   //Test, if language is supported by hyperion
   var langIdx = availLang.indexOf(langLocale);
   if (langIdx > -1) {
     langText = availLangText[langIdx];
-  }
-  else {
+  } else {
     // If language is not supported by hyperion, try fallback language
     langLocale = $.i18n().options.fallbackLocale.substring(0, 2);
     langIdx = availLang.indexOf(langLocale);
     if (langIdx > -1) {
       langText = availLangText[langIdx];
+    } else {
+      langLocale = 'en';
+      langIdx = availLang.indexOf(langLocale);
+      if (langIdx > -1) {
+        langText = availLangText[langIdx];
+      }
     }
   }
 
@@ -195,10 +192,12 @@ function updateUiOnInstance(inst) {
     $('#btn_hypinstanceswitch').toggle(true);
     $('#active_instance_dropdown').prop('disabled', false);
     $('#active_instance_dropdown').css('cursor', 'pointer');
+    $("#active_instance_dropdown").css("pointer-events", "auto");
   } else {
     $('#btn_hypinstanceswitch').toggle(false);
     $('#active_instance_dropdown').prop('disabled', true);
     $("#active_instance_dropdown").css('cursor', 'default');
+    $("#active_instance_dropdown").css("pointer-events", "none");
   }
 }
 
@@ -461,7 +460,8 @@ function createJsonEditor(container, schema, setconfig, usePanel, arrayre) {
   return editor;
 }
 
-function updateJsonEditorSelection(editor, key, addElements, newEnumVals, newTitelVals, newDefaultVal, addSelect, addCustom, addCustomAsFirst, customText) {
+function updateJsonEditorSelection(rootEditor, path, key, addElements, newEnumVals, newTitelVals, newDefaultVal, addSelect, addCustom, addCustomAsFirst, customText) {
+  var editor = rootEditor.getEditor(path);
   var orginalProperties = editor.schema.properties[key];
 
   var newSchema = [];
@@ -536,13 +536,15 @@ function updateJsonEditorSelection(editor, key, addElements, newEnumVals, newTit
 
   editor.original_schema.properties[key] = orginalProperties;
   editor.schema.properties[key] = newSchema[key];
+  rootEditor.validator.schema.properties[editor.key].properties[key] = newSchema[key];
 
   editor.removeObjectProperty(key);
   delete editor.cached_editors[key];
   editor.addObjectProperty(key);
 }
 
-function updateJsonEditorMultiSelection(editor, key, addElements, newEnumVals, newTitelVals, newDefaultVal) {
+function updateJsonEditorMultiSelection(rootEditor, path, key, addElements, newEnumVals, newTitelVals, newDefaultVal) {
+  var editor = rootEditor.getEditor(path);
   var orginalProperties = editor.schema.properties[key];
 
   var newSchema = [];
@@ -593,32 +595,43 @@ function updateJsonEditorMultiSelection(editor, key, addElements, newEnumVals, n
 
   editor.original_schema.properties[key] = orginalProperties;
   editor.schema.properties[key] = newSchema[key];
+  rootEditor.validator.schema.properties[editor.key].properties[key] = newSchema[key];
 
   editor.removeObjectProperty(key);
   delete editor.cached_editors[key];
   editor.addObjectProperty(key);
 }
 
-function updateJsonEditorRange(editor, key, minimum, maximum, defaultValue, step) {
+function updateJsonEditorRange(rootEditor, path, key, minimum, maximum, defaultValue, step, clear) {
+  var editor = rootEditor.getEditor(path);
+
   var orginalProperties = editor.schema.properties[key];
   var newSchema = [];
   newSchema[key] = orginalProperties;
 
-  if (minimum) {
+  if (clear) {
+    delete newSchema[key]["minimum"];
+    delete newSchema[key]["maximum"];
+    delete newSchema[key]["default"];
+    delete newSchema[key]["step"];
+  }
+
+  if (typeof minimum !== "undefined") {
     newSchema[key]["minimum"] = minimum;
   }
-  if (maximum) {
+  if (typeof maximum !== "undefined") {
     newSchema[key]["maximum"] = maximum;
   }
-  if (defaultValue) {
+  if (typeof defaultValue !== "undefined") {
     newSchema[key]["default"] = defaultValue;
   }
-  if (step) {
+  if (typeof step !== "undefined") {
     newSchema[key]["step"] = step;
   }
 
   editor.original_schema.properties[key] = orginalProperties;
   editor.schema.properties[key] = newSchema[key];
+  rootEditor.validator.schema.properties[editor.key].properties[key] = newSchema[key];
 
   editor.removeObjectProperty(key);
   delete editor.cached_editors[key];
@@ -807,14 +820,15 @@ function createRow(id) {
   return el;
 }
 
-function createOptPanel(phicon, phead, bodyid, footerid, css) {
+function createOptPanel(phicon, phead, bodyid, footerid, css, panelId) {
   phead = '<i class="fa ' + phicon + ' fa-fw"></i>' + phead;
+
   var pfooter = document.createElement('button');
   pfooter.className = "btn btn-primary";
   pfooter.setAttribute("id", footerid);
   pfooter.innerHTML = '<i class="fa fa-fw fa-save"></i>' + $.i18n('general_button_savesettings');
 
-  return createPanel(phead, "", pfooter, "panel-default", bodyid, css);
+  return createPanel(phead, "", pfooter, "panel-default", bodyid, css, panelId);
 }
 
 function compareTwoValues(key1, key2, order = 'asc') {
@@ -1141,14 +1155,34 @@ function isAccessLevelCompliant(accessLevel) {
 
 function showInputOptions(path, elements, state) {
   for (var i = 0; i < elements.length; i++) {
-    $('[data-schemapath="' + path + '.' + elements[i] + '"]').toggle(state);
+    $('[data-schemapath="root.' + path + '.' + elements[i] + '"]').toggle(state);
   }
 }
 
-function showInputOptionsForKey(editor, item, showForKey, state) {
+function showInputOptionForItem(editor, path, item, state) {
+  var accessLevel = editor.schema.properties[path].properties[item].access;
+  // Enable element only, if access level compliant
+  if (!state || isAccessLevelCompliant(accessLevel)) {
+    showInputOptions(path, [item], state);
+  }
+}
+
+function showInputOptionsForKey(editor, item, showForKeys, state) {
   var elements = [];
+  var keysToshow = [];
+
+  if (Array.isArray(showForKeys)) {
+    keysToshow = showForKeys;
+  } else {
+    if (typeof showForKeys === 'string') {
+      keysToshow.push(showForKeys);
+    } else {
+      return
+    }
+  }
+
   for (var key in editor.schema.properties[item].properties) {
-    if (showForKey !== key) {
+    if ($.inArray(key, keysToshow) === -1) {
       var accessLevel = editor.schema.properties[item].properties[key].access;
 
       //Always disable all elements, but only enable elements, if access level compliant
@@ -1157,5 +1191,5 @@ function showInputOptionsForKey(editor, item, showForKey, state) {
       }
     }
   }
-  showInputOptions("root." + item, elements, state);
+  showInputOptions(item, elements, state);
 }

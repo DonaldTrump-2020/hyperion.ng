@@ -1,21 +1,25 @@
 #include <hyperion/Grabber.h>
 
 Grabber::Grabber(const QString& grabberName, int width, int height, int cropLeft, int cropRight, int cropTop, int cropBottom)
-	: _imageResampler()
+	: _grabberName(grabberName)
+	, _imageResampler()
 	, _useImageResampler(true)
 	, _videoMode(VideoMode::VIDEO_2D)
+	, _videoStandard(VideoStandard::NO_CHANGE)
+	, _pixelDecimation(8)
+	, _flipMode(FlipMode::NO_CHANGE)
 	, _width(width)
 	, _height(height)
 	, _fps(15)
+	, _fpsSoftwareDecimation(0)
 	, _input(-1)
 	, _cropLeft(0)
 	, _cropRight(0)
 	, _cropTop(0)
 	, _cropBottom(0)
 	, _enabled(true)
-	, _log(Logger::getInstance(grabberName.toUpper()))
+	, _log(Logger::getInstance(_grabberName.toUpper()))
 {
-	Grabber::setVideoMode(VideoMode::VIDEO_2D);
 	Grabber::setCropping(cropLeft, cropRight, cropTop, cropBottom);
 }
 
@@ -27,11 +31,42 @@ void Grabber::setEnabled(bool enable)
 
 void Grabber::setVideoMode(VideoMode mode)
 {
-	Debug(_log,"Set videomode to %d", mode);
+	Debug(_log,"Set videomode to %s", QSTRING_CSTR(videoMode2String(mode)));
 	_videoMode = mode;
 	if ( _useImageResampler )
 	{
 		_imageResampler.setVideoMode(_videoMode);
+	}
+}
+
+void Grabber::setVideoStandard(VideoStandard videoStandard)
+{
+	if (_videoStandard != videoStandard)
+		_videoStandard = videoStandard;
+}
+
+bool Grabber::setPixelDecimation(int pixelDecimation)
+{
+	if (_pixelDecimation != pixelDecimation)
+	{
+		Debug(_log,"Set image size decimation to %d", pixelDecimation);
+		_pixelDecimation = pixelDecimation;
+		_imageResampler.setHorizontalPixelDecimation(pixelDecimation);
+		_imageResampler.setVerticalPixelDecimation(pixelDecimation);
+
+		return true;
+	}
+
+	return false;
+}
+
+void Grabber::setFlipMode(FlipMode mode)
+{
+	Debug(_log,"Set flipmode to %s", QSTRING_CSTR(flipModeToString(mode)));
+	_flipMode = mode;
+	if ( _useImageResampler )
+	{
+		_imageResampler.setFlipMode(_flipMode);
 	}
 }
 
@@ -87,6 +122,7 @@ bool Grabber::setWidthHeight(int width, int height)
 			Error(_log, "Rejecting invalid width/height values as it collides with image cropping: width: %d, height: %d", width, height);
 			return false;
 		}
+
 		Debug(_log, "Set new width: %d, height: %d for capture", width, height);
 		_width = width;
 		_height = height;
@@ -99,9 +135,20 @@ bool Grabber::setFramerate(int fps)
 {
 	if((fps > 0) && (_fps != fps))
 	{
+		Debug(_log,"Set new frames per second to: %i fps", fps);
 		_fps = fps;
 		return true;
 	}
 
 	return false;
+}
+
+void Grabber::setFpsSoftwareDecimation(int decimation)
+{
+	if((_fpsSoftwareDecimation != decimation))
+	{
+		_fpsSoftwareDecimation = decimation;
+		if(decimation > 0)
+			Debug(_log,"Skip %i frame per second", decimation);
+	}
 }

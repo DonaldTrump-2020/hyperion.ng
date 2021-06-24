@@ -26,6 +26,9 @@ void saveScreenshot(QString filename, const Image<ColorRgb> & image)
 
 int main(int argc, char ** argv)
 {
+	Logger *log = Logger::getInstance("QTGRABBER");
+	Logger::setLogLevel(Logger::INFO);
+
 	//QCoreApplication app(argc, argv);
 	QGuiApplication app(argc, argv);
 
@@ -45,10 +48,17 @@ int main(int argc, char ** argv)
 		Option        & argAddress         = parser.add<Option>       ('a', "address",    "Set the address of the hyperion server [default: %1]", "127.0.0.1:19400");
 		IntOption     & argPriority        = parser.add<IntOption>    ('p', "priority",   "Use the provided priority channel (suggested 100-199) [default: %1]", "150");
 		BooleanOption & argSkipReply       = parser.add<BooleanOption>(0x0, "skip-reply", "Do not receive and check reply messages from Hyperion");
+		BooleanOption & argDebug           = parser.add<BooleanOption>(0x0, "debug", "Enable debug logging");
 		BooleanOption & argHelp            = parser.add<BooleanOption>('h', "help",        "Show this help message and exit");
 
 		// parse all arguments
 		parser.process(app);
+
+		// check if debug logging is required
+		if (parser.isSet(argDebug))
+		{
+			Logger::setLogLevel(Logger::DEBUG);
+		}
 
 		// check if we need to display the usage. exit if we do.
 		if (parser.isSet(argHelp))
@@ -56,7 +66,7 @@ int main(int argc, char ** argv)
 			parser.showHelp(0);
 		}
 
-		QtWrapper grabber(
+		QtWrapper qtWrapper(
 			1000 / argFps.getInt(parser),
 			argCropLeft.getInt(parser),
 			argCropRight.getInt(parser),
@@ -65,10 +75,13 @@ int main(int argc, char ** argv)
 			argSizeDecimation.getInt(parser),
 			argDisplay.getInt(parser));
 
+		if (!qtWrapper.displayInit())
+			return -1;
+
 		if (parser.isSet(argScreenshot))
 		{
 			// Capture a single screenshot and finish
-			const Image<ColorRgb> &screenshot = grabber.getScreenshot();
+			const Image<ColorRgb> &screenshot = qtWrapper.getScreenshot();
 			saveScreenshot("screenshot.png", screenshot);
 		}
 		else
@@ -89,10 +102,10 @@ int main(int argc, char ** argv)
 			FlatBufferConnection flatbuf("Qt Standalone", address, argPriority.getInt(parser), parser.isSet(argSkipReply));
 
 			// Connect the screen capturing to flatbuf connection processing
-			QObject::connect(&grabber, SIGNAL(sig_screenshot(const Image<ColorRgb> &)), &flatbuf, SLOT(setImage(Image<ColorRgb>)));
+			QObject::connect(&qtWrapper, SIGNAL(sig_screenshot(const Image<ColorRgb> &)), &flatbuf, SLOT(setImage(Image<ColorRgb>)));
 
 			// Start the capturing
-			grabber.start();
+			qtWrapper.start();
 
 			// Start the application
 			app.exec();
@@ -100,8 +113,8 @@ int main(int argc, char ** argv)
 	}
 	catch (const std::runtime_error & e)
 	{
-		// An error occured. Display error and quit
-		Error(Logger::getInstance("QTGRABBER"), "%s", e.what());
+		// An error occurred. Display error and quit
+		Error(log, "%s", e.what());
 		return -1;
 	}
 	return 0;

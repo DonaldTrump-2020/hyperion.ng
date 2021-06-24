@@ -6,7 +6,7 @@
 #include <utils/ColorRgb.h>
 #include <utils/Image.h>
 #include <utils/VideoMode.h>
-#include <grabber/VideoStandard.h>
+#include <utils/VideoStandard.h>
 #include <utils/ImageResampler.h>
 #include <utils/Logger.h>
 #include <utils/Components.h>
@@ -15,8 +15,7 @@
 
 ///
 /// @brief The Grabber class is responsible to apply image resizes (with or without ImageResampler)
-/// Overwrite the videoMode with setVideoMode()
-/// Overwrite setCropping()
+
 class Grabber : public QObject
 {
 	Q_OBJECT
@@ -31,12 +30,18 @@ public:
 	virtual void setVideoMode(VideoMode mode);
 
 	///
+	/// Apply new flip mode (vertical/horizontal/both)
+	/// @param[in] mode The new flip mode
+	///
+	virtual void setFlipMode(FlipMode mode);
+
+	///
 	/// @brief Apply new crop values, on errors reject the values
 	///
 	virtual void setCropping(unsigned cropLeft, unsigned cropRight, unsigned cropTop, unsigned cropBottom);
 
 	///
-	/// @brief Apply new video input (used from v4l)
+	/// @brief Apply new video input (used from v4l2/MediaFoundation)
 	/// @param input device input
 	///
 	virtual bool setInput(int input);
@@ -48,47 +53,26 @@ public:
 	virtual bool setWidthHeight(int width, int height);
 
 	///
-	/// @brief Apply new framerate (used from v4l)
+	/// @brief Apply new framerate (used from v4l2/MediaFoundation)
 	/// @param fps framesPerSecond
 	///
 	virtual bool setFramerate(int fps);
 
 	///
-	/// @brief Apply new pixelDecimation (used from x11, xcb and qt)
+	/// @brief Apply new framerate software decimation (used from v4l2/MediaFoundation)
+	/// @param decimation how many frames per second to omit
 	///
-	virtual void setPixelDecimation(int pixelDecimation) {}
+	virtual void setFpsSoftwareDecimation(int decimation);
 
 	///
-	/// @brief Apply new signalThreshold (used from v4l)
+	/// @brief Apply videoStandard (used from v4l2)
 	///
-	virtual void setSignalThreshold(
-					double redSignalThreshold,
-					double greenSignalThreshold,
-					double blueSignalThreshold,
-					int noSignalCounterThreshold = 50) {}
-	///
-	/// @brief Apply new SignalDetectionOffset  (used from v4l)
-	///
-	virtual void setSignalDetectionOffset(
-					double verticalMin,
-					double horizontalMin,
-					double verticalMax,
-					double horizontalMax) {}
+	virtual void setVideoStandard(VideoStandard videoStandard);
 
 	///
-	/// @brief Apply SignalDetectionEnable (used from v4l)
+	/// @brief  Apply new pixelDecimation (used from v4l2, MediaFoundation, x11, xcb and qt)
 	///
-	virtual void setSignalDetectionEnable(bool enable) {}
-
-	///
-	/// @brief Apply CecDetectionEnable (used from v4l)
-	///
-	virtual void setCecDetectionEnable(bool enable) {}
-
-	///
-	/// @brief Apply device and videoStanded (used from v4l)
-	///
-	virtual void setDeviceVideoStandard(QString device, VideoStandard videoStandard) {}
+	virtual bool setPixelDecimation(int pixelDecimation);
 
 	///
 	/// @brief Apply display index (used from qt)
@@ -115,47 +99,27 @@ public:
 	///
 	void setEnabled(bool enable);
 
-	///
-	/// @brief Get a list of all available V4L devices
-	/// @return List of all available V4L devices on success else empty List
-	///
-	virtual QStringList getV4L2devices() const { return QStringList(); }
-
-	///
-	/// @brief Get the V4L device name
-	/// @param devicePath The device path
-	/// @return The name of the V4L device on success else empty String
-	///
-	virtual QString getV4L2deviceName(const QString& /*devicePath*/) const { return QString(); }
-
-	///
-	/// @brief Get a name/index pair of supported device inputs
-	/// @param devicePath The device path
-	/// @return multi pair of name/index on success else empty pair
-	///
-	virtual QMultiMap<QString, int> getV4L2deviceInputs(const QString& /*devicePath*/) const { return QMultiMap<QString, int>(); }
-
-	///
-	/// @brief Get a list of supported device resolutions
-	/// @param devicePath The device path
-	/// @return List of resolutions on success else empty List
-	///
-	virtual QStringList getResolutions(const QString& /*devicePath*/) const { return QStringList(); }
-
-	///
-	/// @brief Get a list of supported device framerates
-	/// @param devicePath The device path
-	/// @return List of framerates on success else empty List
-	///
-	virtual QStringList getFramerates(const QString& devicePath) const { return QStringList(); }
+	QString getGrabberName() const { return _grabberName; }
 
 protected:
+
+	QString _grabberName;
+
 	ImageResampler _imageResampler;
 
 	bool _useImageResampler;
 
 	/// the selected VideoMode
-	VideoMode    _videoMode;
+	VideoMode _videoMode;
+
+	/// the used video standard
+	VideoStandard _videoStandard;
+
+	/// Image size decimation
+	int _pixelDecimation;
+
+	/// the used Flip Mode
+	FlipMode _flipMode;
 
 	/// With of the captured snapshot [pixels]
 	int _width;
@@ -165,6 +129,9 @@ protected:
 
 	/// frame per second
 	int _fps;
+
+	/// fps software decimation
+	int _fpsSoftwareDecimation;
 
 	/// device input
 	int _input;

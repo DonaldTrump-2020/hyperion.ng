@@ -15,7 +15,7 @@ class QtGrabber : public Grabber
 {
 public:
 
-	QtGrabber(int cropLeft, int cropRight, int cropTop, int cropBottom, int pixelDecimation, int display);
+	QtGrabber(int cropLeft=0, int cropRight=0, int cropTop=0, int cropBottom=0, int pixelDecimation=8, int display=0);
 
 	~QtGrabber() override;
 
@@ -42,7 +42,7 @@ public:
 	///
 	/// @brief Apply new pixelDecimation
 	///
-	void setPixelDecimation(int pixelDecimation) override;
+	bool setPixelDecimation(int pixelDecimation) override;
 
 	///
 	/// Set the crop values
@@ -58,6 +58,28 @@ public:
 	///
 	void setDisplayIndex(int index) override;
 
+	///
+	/// @brief Discover QT screens available (for configuration).
+	///
+	/// @param[in] params Parameters used to overwrite discovery default behaviour
+	///
+	/// @return A JSON structure holding a list of devices found
+	///
+	QJsonObject discover(const QJsonObject& params);
+
+	///
+	/// @brief Setup a new capture display, will free the previous one
+	/// @return True on success, false if no display is found
+	///
+	bool setupDisplay();
+
+	///
+	/// @brief Opens the input device.
+	///
+	/// @return Zero, on success (i.e. device is ready), else negative
+	///
+	bool open();
+
 private slots:
 	///
 	/// @brief is called whenever the current _screen changes it's geometry
@@ -66,11 +88,7 @@ private slots:
 	void geometryChanged(const QRect &geo);
 
 private:
-	///
-	/// @brief Setup a new capture display, will free the previous one
-	/// @return True on success, false if no display is found
-	///
-	bool setupDisplay();
+
 
 	///
 	/// @brief Is called whenever we need new screen dimension calculations based on window geometry
@@ -84,13 +102,19 @@ private:
 
 private:
 
-	unsigned _display;
-	int _pixelDecimation;
-	unsigned _screenWidth;
-	unsigned _screenHeight;
-	unsigned _src_x;
-	unsigned _src_y;
-	unsigned _src_x_max;
-	unsigned _src_y_max;
+	int _display;
+	int _numberOfSDisplays;
+
+	int _calculatedWidth;
+	int _calculatedHeight;
+	int _src_x;
+	int _src_y;
+	int _src_x_max;
+	int _src_y_max;
+	bool _isWayland;
+
 	QScreen* _screen;
+	bool _isVirtual;
+
+	Logger * _logger;
 };
